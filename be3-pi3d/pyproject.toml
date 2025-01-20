@@ -10,6 +10,7 @@ package-mode = false
 python = "^3.12"
 opencv-python = "^4.11.0.86"
 matplotlib = "^3.10.0"
+scipy = "^1.15.1"
 
 
 [build-system]

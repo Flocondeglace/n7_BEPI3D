@@ -1,24 +1,33 @@
 import cv2
 import numpy as np
+import os
 import matplotlib.pyplot as plt
+import scipy
+
+
+def func(x, a, b, c):
+    return a * x + b * x**2 + c
 
 
 def select_line(img, corners):
     """
-    Retourne une matrice contenant 3 colonnes :
+    Retourne une matrice contenant 4 colonnes :
     - une pour les valeurs x de l'image,
     - une pour les valeurs y
     - une pour l'intensité de l'image en ce point
+    - une pour approx
     """
     y_left = (corners[0, 1] + corners[3, 1]) // 2
     y_right = (corners[1, 1] + corners[2, 1]) // 2
     x_min = min(corners[0, 0], corners[1, 0])
     x_max = max(corners[0, 0], corners[1, 0])
     y = np.linspace(y_left, y_right, (x_max - x_min))
-    line = np.zeros((x_max - x_min, 3))
+    line = np.zeros((x_max - x_min, 4))
     for i in range(line.shape[0]):
         x = x_min + i
-        line[i, :] = [x, y[i], img[int(y[i]), x]]
+        line[i, :] = [x, y[i], img[int(y[i]), x], 0]
+    popt, pcov = scipy.optimize.curve_fit(func, line[:, 0], line[:, 2])
+    line[:, 3] = func(line[:, 0], *popt)
     return line
 
 
@@ -68,6 +77,25 @@ def compute_nearly_E(cos_4_alphas, focale, lum):
     return nearly_E
 
 
+def get_corners(imgs, filename):
+    corners = np.zeros((imgs.shape[0], 4, 2), dtype=np.int64)
+    print(corners.shape)
+    for i in range(imgs.shape[0]):
+        img = imgs[i, :, :]
+        plt.imshow(img)
+        plt.title("Cliquez sur les 4 coins intérieurs")
+        plt.axis("on")
+        print("Veuillez cliquer sur 4 points sur l'image.")
+        points = plt.ginput(4)
+        plt.close()
+        corners[i, :, :] = np.array(points, dtype=np.int64)
+    print(corners)
+    # np.savetxt(filename, corners, delimiter=",")
+    np.save(filename, corners)
+    print(f"Corners saved in {filename}")
+    return corners
+
+
 def main() -> int:
     # Quelques variables
     corners = [
@@ -79,11 +107,29 @@ def main() -> int:
         [[1924, 1471], [3070, 1505], [3036, 2008], [1885, 1987]],
         [[1975, 1493], [3041, 1522], [3006, 1991], [1936, 1970]],
     ]
-    corners = np.array(corners)
+    corners = [
+        [[1292.0, 1052.0], [3688.0, 1119.0], [3582.0, 2192.0], [1139.0, 2144.0]],
+        [[1503.0, 1215.0], [3438.0, 1292.0], [3362.0, 2106.0], [1427.0, 2087.0]],
+        [[1676.0, 1349.0], [3266.0, 1368.0], [3209.0, 2068.0], [1609.0, 2058.0]],
+        [[1771.0, 1397.0], [3151.0, 1445.0], [3113.0, 2049.0], [1743.0, 2001.0]],
+        [[1886.0, 1435.0], [3094.0, 1445.0], [3113.0, 1991.0], [1810.0, 1991.0]],
+        [[1915.0, 1464.0], [3046.0, 1531.0], [3007.0, 2020.0], [1886.0, 1991.0]],
+        [[1944.0, 1493.0], [3036.0, 1541.0], [3017.0, 1982.0], [1925.0, 1962.0]],
+        [[2021.0, 1512.0], [3007.0, 1531.0], [2969.0, 1972.0], [2001.0, 1943.0]],
+        [[2059.0, 1522.0], [2959.0, 1570.0], [2969.0, 1953.0], [2049.0, 1962.0]],
+        [[2107.0, 1541.0], [2969.0, 1570.0], [2921.0, 1953.0], [2078.0, 1905.0]],
+        [[2135.0, 1550.0], [2931.0, 1598.0], [2912.0, 1924.0], [2088.0, 1905.0]],
+        [[2212.0, 1560.0], [2902.0, 1598.0], [2892.0, 1905.0], [2116.0, 1895.0]],
+        [[2174.0, 1589.0], [2931.0, 1598.0], [2854.0, 1905.0], [2174.0, 1905.0]],
+        [[2212.0, 1589.0], [2883.0, 1627.0], [2864.0, 1905.0], [2222.0, 1867.0]],
+    ]
+
+    corners = np.array(corners, dtype=np.int64)
 
     path_images_folder = (
         "/home/flocondeglace/Documents/Ecole/PI3D/n7_BEPI3D/be3-pi3d/images/"
     )
+
     num_images = np.array([55] + list(np.arange(42, 55)))
 
     # Charger les images
@@ -93,27 +139,41 @@ def main() -> int:
         imgs.append(load_green_image(path_image))
     imgs = np.array(imgs)
 
+    path_corners = (
+        "/home/flocondeglace/Documents/Ecole/PI3D/n7_BEPI3D/be3-pi3d/corners.npy"
+    )
+    # Corners from file
+    # if os.path.isfile(path_corners):
+    #     # corners = np.loadtxt(path_corners, delimiter=",")
+    #     corners = np.load(path_corners)
+    #     corners = np.array(corners, dtype=np.int64)
+    # else:
+    #     corners = get_corners(imgs, path_corners)
+
     # Afficher des infos
     nb_images, height, width = imgs.shape
     print(f"There is {nb_images} images of size width={width}, height={height}")
+    print(f"Corners : {corners}")
 
     print(f"imgs shape : {imgs.shape}")
 
     # Trouver les lignes de l'image à analyser
     lines = []
     plt.figure()
-    for i in range(corners.shape[0]):
+    for i in range(0, corners.shape[0], 3):
         linei = select_line(imgs[i, :, :], corners[i, :, :])
         lines.append(linei)
-        plt.plot(linei[:, 0], linei[:, 2])
+
+        plt.plot(linei[:, 0], linei[:, 3])
     plt.ylabel("I_green")
     plt.xlabel("pixels")
     plt.show()
 
     plt.figure()
-    for i in range(corners.shape[0]):
+    for i in range(len(lines)):
         plt.subplot(4, 4, i + 1)
         plt.plot(lines[i][:, 0], lines[i][:, 2])
+        plt.plot(lines[i][:, 0], lines[i][:, 3])
         plt.ylabel("I")
         plt.xlabel("pixels")
     plt.show()
