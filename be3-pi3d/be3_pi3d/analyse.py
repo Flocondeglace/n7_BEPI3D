@@ -3,6 +3,7 @@ import numpy as np
 import os
 import matplotlib.pyplot as plt
 import scipy
+import rawpy
 
 
 def func(x, a, b, c):
@@ -34,6 +35,8 @@ def select_line(img, corners):
 def load_green_image(path_image, kernel_size: int = 50):
     """retourne le canal vert de l'image"""
     img = cv2.imread(path_image)
+    # raw = rawpy.imread(path)
+    # img = raw.postprocess()
 
     if img is None:
         print("image not found : " + path_image)
@@ -160,11 +163,14 @@ def main() -> int:
     # Trouver les lignes de l'image à analyser
     lines = []
     plt.figure()
-    for i in range(0, corners.shape[0], 3):
+    for i in range(0, corners.shape[0], 2):
         linei = select_line(imgs[i, :, :], corners[i, :, :])
         lines.append(linei)
 
-        plt.plot(linei[:, 0], linei[:, 3])
+        plt.plot(
+            (linei[:, 0] - linei[0, 0]) / (linei[-1, 0] - linei[0, 0]), linei[:, 3]
+        )
+    plt.legend([str(i) for i in range(0, corners.shape[0], 3)])
     plt.ylabel("I_green")
     plt.xlabel("pixels")
     plt.show()
