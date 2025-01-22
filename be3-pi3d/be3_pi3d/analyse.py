@@ -4,10 +4,11 @@ import os
 import matplotlib.pyplot as plt
 import scipy
 import rawpy
+import exifread
 
 
 def func(x, a, b, c):
-    return a * x + b * x**2 + c
+    return a * x**2 + b * x + c
 
 
 def select_line(img, corners):
@@ -29,23 +30,35 @@ def select_line(img, corners):
         line[i, :] = [x, y[i], img[int(y[i]), x], 0]
     popt, pcov = scipy.optimize.curve_fit(func, line[:, 0], line[:, 2])
     line[:, 3] = func(line[:, 0], *popt)
-    return line
+    return line, popt
 
 
-def load_green_image(path_image, kernel_size: int = 50):
-    """retourne le canal vert de l'image"""
-    img = cv2.imread(path_image)
-    # raw = rawpy.imread(path)
-    # img = raw.postprocess()
+def load_image(path_image, kernel_size: int = 10, plot=False):
+    """retourne l'image"""
+    raw = rawpy.imread(path_image)
 
-    if img is None:
+    if raw is None:
         print("image not found : " + path_image)
         return None
     else:
+        file = open(path_image, "rb")
+        tags = exifread.process_file(file)
+        # print("focale : ", tags["EXIF FocalLength"])
+        # print([str(k) for k in tags.keys()])
+        # img = raw.postprocess()
+        img = raw.raw_image_visible
+
+        # Afficher les raw
+        if plot:
+            plt.figure()
+            plt.imshow(img, cmap="gray")
+            plt.show()
+
+        # Lisser l'image
         kernel2 = np.ones((kernel_size, kernel_size), np.float32) / (kernel_size**2)
         # print("image loaded : " + path_image)
         img = cv2.filter2D(src=img, ddepth=-1, kernel=kernel2)
-        return img[:, :, 1]
+        return img
 
 
 def plot_all_images(imgs):
@@ -100,6 +113,9 @@ def get_corners(imgs, filename):
 
 
 def main() -> int:
+    distance_2_arukos_width = 40.2  # cm
+    distance_first_cam = 60.0  # cm
+
     # Quelques variables
     corners = [
         [[1258, 1053], [1692, 1118], [3626, 2192], [1142, 2140]],
@@ -138,8 +154,8 @@ def main() -> int:
     # Charger les images
     imgs = []
     for n in num_images:
-        path_image = path_images_folder + "pi3d-" + str(n) + ".jpg"
-        imgs.append(load_green_image(path_image))
+        path_image = path_images_folder + "pi3d-" + str(n) + ".cr2"
+        imgs.append(load_image(path_image))
     imgs = np.array(imgs)
 
     path_corners = (
@@ -156,32 +172,56 @@ def main() -> int:
     # Afficher des infos
     nb_images, height, width = imgs.shape
     print(f"There is {nb_images} images of size width={width}, height={height}")
-    print(f"Corners : {corners}")
+    # print(f"Corners : {corners}")
 
     print(f"imgs shape : {imgs.shape}")
 
     # Trouver les lignes de l'image à analyser
     lines = []
+    taille_pixels = []
+    alphas = []
     plt.figure()
-    for i in range(0, corners.shape[0], 2):
-        linei = select_line(imgs[i, :, :], corners[i, :, :])
+    step = 2
+    for i in range(0, corners.shape[0], step):
+        linei, popti = select_line(imgs[i, :, :], corners[i, :, :])
         lines.append(linei)
-
-        plt.plot(
-            (linei[:, 0] - linei[0, 0]) / (linei[-1, 0] - linei[0, 0]), linei[:, 3]
+        x_axis = (linei[:, 0] - linei[0, 0]) / (linei[-1, 0] - linei[0, 0])
+        print(len(linei[:, 3]))
+        nb_pixels_ligne = len(linei[:, 3])
+        current_taille_pixels = distance_2_arukos_width / nb_pixels_ligne
+        taille_pixels.append(current_taille_pixels)
+        distance_cami = current_taille_pixels * distance_first_cam / taille_pixels[0]
+        alphas.append(
+            (2 / np.sqrt((x_axis * current_taille_pixels) ** 2 + 2**2)) ** 4
+            # compute_cos_4_alphas(
+            #    np.sqrt((x_axis * current_taille_pixels) ** 2 + distance_cami**2), 2
+            # )
         )
-    plt.legend([str(i) for i in range(0, corners.shape[0], 3)])
-    plt.ylabel("I_green")
+
+        print(f"distance : {distance_cami} cm")
+        plt.plot(x_axis, linei[:, 3])
+        plt.text(
+            x_axis[-1], linei[-1, 3], str(num_images[i]), fontsize=10, color="black"
+        )
+        # print(f"paramètre de la droite de l'image {num_images[i]} : {popti}")
+    plt.legend([str(num_images[i]) for i in range(0, corners.shape[0], step)])
+    plt.ylabel("I")
     plt.xlabel("pixels")
     plt.show()
 
+    plt.figure()
+    for i in range(3):  # len(alphas)):
+        plt.plot(alphas[i] / max(alphas[i]))
+    plt.legend([str(i) for i in range(0, 3)])
+    plt.show()
     plt.figure()
     for i in range(len(lines)):
         plt.subplot(4, 4, i + 1)
         plt.plot(lines[i][:, 0], lines[i][:, 2])
         plt.plot(lines[i][:, 0], lines[i][:, 3])
         plt.ylabel("I")
-        plt.xlabel("pixels")
+        plt.xlabel("distance (cm)")
+        plt.title(str(num_images[i * step]))
     plt.show()
 
     return 0
