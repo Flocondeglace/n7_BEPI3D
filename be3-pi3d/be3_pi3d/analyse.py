@@ -209,19 +209,29 @@ def main() -> int:
     plt.xlabel("pixels")
     plt.show()
 
+    # experience alpha
+    # plt.figure()
+    # for i in range(3):  # len(alphas)):
+    #     plt.plot(alphas[i] / max(alphas[i]))
+    # plt.legend([str(i) for i in range(0, 3)])
+    # plt.show()
+
+    # Plot interpolation
+    # plt.figure()
+    # for i in range(len(lines)):
+    #     plt.subplot(4, 4, i + 1)
+    #     plt.plot(lines[i][:, 0], lines[i][:, 2])
+    #     plt.plot(lines[i][:, 0], lines[i][:, 3])
+    #     plt.ylabel("I")
+    #     plt.xlabel("distance (cm)")
+    #     plt.title(str(num_images[i * step]))
+    # plt.show()
     plt.figure()
-    for i in range(3):  # len(alphas)):
-        plt.plot(alphas[i] / max(alphas[i]))
-    plt.legend([str(i) for i in range(0, 3)])
-    plt.show()
-    plt.figure()
-    for i in range(len(lines)):
-        plt.subplot(4, 4, i + 1)
-        plt.plot(lines[i][:, 0], lines[i][:, 2])
-        plt.plot(lines[i][:, 0], lines[i][:, 3])
-        plt.ylabel("I")
-        plt.xlabel("distance (cm)")
-        plt.title(str(num_images[i * step]))
+    plt.plot(lines[0][:, 3])
+    plt.plot(
+        lines[-1][:, 3] * (np.cos(lines[-1][:, 0] * taille_pixels[-1])) ** 4 + 2000
+    )
+    plt.legend(["normal", "inventer"])
     plt.show()
 
     return 0
