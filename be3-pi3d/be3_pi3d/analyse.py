@@ -33,20 +33,37 @@ def select_line(img, corners):
     return line, popt
 
 
-def load_image(path_image, kernel_size: int = 10, plot=False):
-    """retourne l'image"""
+def load_image(path_image, kernel_size: int = 20, plot=False):
+    """retourne l'image en vert"""
     raw = rawpy.imread(path_image)
 
     if raw is None:
         print("image not found : " + path_image)
         return None
     else:
-        file = open(path_image, "rb")
-        tags = exifread.process_file(file)
+        # Pour récupérer la focale
+        # file = open(path_image, "rb")
+        # tags = exifread.process_file(file)
         # print("focale : ", tags["EXIF FocalLength"])
         # print([str(k) for k in tags.keys()])
-        # img = raw.postprocess()
-        img = raw.raw_image_visible
+
+        raw_data = raw.raw_image_visible
+        pattern = raw.raw_pattern
+        # print("pattern : ", pattern)
+        mask = pattern % 2 == 1
+        green_mask = np.tile(mask, (raw_data.shape[0] // 2, raw_data.shape[1] // 2))
+        img = np.where(green_mask, raw_data, 0)
+        # Interpoler le vert des autres pixels
+        filter_green_kernel = np.array(
+            [[0, 1, 0], [1, 0, 1], [0, 1, 0]], dtype=np.float32
+        )
+        filter_green_kernel /= filter_green_kernel.sum()
+        # Calculer la moyenne locale des pixels verts pour remplacer les pixels vide
+        mean_values = cv2.filter2D(
+            img.astype(np.float32), ddepth=-1, kernel=filter_green_kernel
+        )
+        zero_positions = img == 0
+        img[zero_positions] = mean_values[zero_positions]
 
         # Afficher les raw
         if plot:
@@ -55,9 +72,11 @@ def load_image(path_image, kernel_size: int = 10, plot=False):
             plt.show()
 
         # Lisser l'image
-        kernel2 = np.ones((kernel_size, kernel_size), np.float32) / (kernel_size**2)
+        kernel_lissage = np.ones((kernel_size, kernel_size), np.float32) / (
+            kernel_size**2
+        )
         # print("image loaded : " + path_image)
-        img = cv2.filter2D(src=img, ddepth=-1, kernel=kernel2)
+        img = cv2.filter2D(src=img, ddepth=-1, kernel=kernel_lissage)
         return img
 
 
@@ -186,7 +205,6 @@ def main() -> int:
         linei, popti = select_line(imgs[i, :, :], corners[i, :, :])
         lines.append(linei)
         x_axis = (linei[:, 0] - linei[0, 0]) / (linei[-1, 0] - linei[0, 0])
-        print(len(linei[:, 3]))
         nb_pixels_ligne = len(linei[:, 3])
         current_taille_pixels = distance_2_arukos_width / nb_pixels_ligne
         taille_pixels.append(current_taille_pixels)
@@ -217,15 +235,16 @@ def main() -> int:
     # plt.show()
 
     # Plot interpolation
-    # plt.figure()
-    # for i in range(len(lines)):
-    #     plt.subplot(4, 4, i + 1)
-    #     plt.plot(lines[i][:, 0], lines[i][:, 2])
-    #     plt.plot(lines[i][:, 0], lines[i][:, 3])
-    #     plt.ylabel("I")
-    #     plt.xlabel("distance (cm)")
-    #     plt.title(str(num_images[i * step]))
-    # plt.show()
+    plt.figure()
+    for i in range(len(lines)):
+        plt.subplot(4, 4, i + 1)
+        plt.plot(lines[i][:, 0], lines[i][:, 2])
+        plt.plot(lines[i][:, 0], lines[i][:, 3])
+        plt.ylabel("I")
+        plt.xlabel("distance (cm)")
+        plt.title(str(num_images[i * step]))
+    plt.tight_layout()
+    plt.show()
     plt.figure()
     plt.plot(lines[0][:, 3])
     plt.plot(
