@@ -8,16 +8,27 @@ import exifread
 
 
 def func(x, a, b, c):
+    """
+    Fonction d'interpolation pour lisser les courbes.
+    """
     return a * x**2 + b * x + c
 
 
 def select_line(img, corners):
     """
-    Retourne une matrice contenant 4 colonnes :
+    Cette fonction retourne une matrice contenant 4 colonnes :
     - une pour les valeurs x de l'image,
     - une pour les valeurs y
     - une pour l'intensité de l'image en ce point
     - une pour approx
+
+    Arguments:
+        img (np.ndarray): l'image dont on veut extraire les informations
+        corners (list): liste des coordonnées des QRCode
+
+    Return:
+        line (np.ndarray): 
+        popt (array): tableau de valeurs pour ajuster la fonction func à des données
     """
     y_left = (corners[0, 1] + corners[3, 1]) // 2
     y_right = (corners[1, 1] + corners[2, 1]) // 2
@@ -28,13 +39,24 @@ def select_line(img, corners):
     for i in range(line.shape[0]):
         x = x_min + i
         line[i, :] = [x, y[i], img[int(y[i]), x], 0]
-    popt, pcov = scipy.optimize.curve_fit(func, line[:, 0], line[:, 2])
+    popt, pcov = scipy.optimize.curve_fit(func, line[:, 0], line[:, 2]) # Utiliser les moindres carrés non linéaires pour ajuster une fonction, f, à des données
     line[:, 3] = func(line[:, 0], *popt)
     return line, popt
 
 
 def load_image(path_image, kernel_size: int = 20, plot=False):
-    """retourne l'image en vert"""
+    """
+    Cette fonction retourne le canal vert de l'image lissée.
+    
+    Arguments:
+        path_image (str): chemin de l'image .raw à charger
+        kernel_size (int): taille du noyau pour le lissage de l'image (enlever les granules sur le fond vert)
+        plot (bool): Afficher l'image .raw
+
+    Return:
+        img (np.ndarray): le canal vert de l'image .raw lissée
+
+    """
     raw = rawpy.imread(path_image)
 
     if raw is None:
@@ -164,23 +186,34 @@ def main() -> int:
 
     corners = np.array(corners, dtype=np.int64)
 
+    # path_images_folder = (
+    #     "/home/flocondeglace/Documents/Ecole/PI3D/n7_BEPI3D/be3-pi3d/images/"
+    # )
     path_images_folder = (
-        "/home/flocondeglace/Documents/Ecole/PI3D/n7_BEPI3D/be3-pi3d/images/"
+        "/home/jureme/PI3D/n7_BEPI3D/be3-pi3d/images/"
     )
+    
 
     num_images = np.array([55] + list(np.arange(42, 55)))
 
     # Charger les images
+    # imgs = []
+    # for n in num_images:
+    #     path_image = path_images_folder + "pi3d-" + str(n) + ".cr2"
+    #     imgs.append(load_image(path_image))
+    # imgs = np.array(imgs)
     imgs = []
-    for n in num_images:
-        path_image = path_images_folder + "pi3d-" + str(n) + ".cr2"
-        imgs.append(load_image(path_image))
+    for path_image in os.listdir(path_images_folder):      
+        imgs.append(load_image( path_images_folder + path_image))
     imgs = np.array(imgs)
 
-    path_corners = (
-        "/home/flocondeglace/Documents/Ecole/PI3D/n7_BEPI3D/be3-pi3d/corners.npy"
-    )
-    # Corners from file
+    # path_corners = (
+    #     "/home/flocondeglace/Documents/Ecole/PI3D/n7_BEPI3D/be3-pi3d/corners.npy"
+    # )
+    # path_corners = (
+    #     "/home/jureme/PI3D/n7_BEPI3D/be3-pi3d/corners.npy"
+    # )
+    # # Corners from file
     # if os.path.isfile(path_corners):
     #     # corners = np.loadtxt(path_corners, delimiter=",")
     #     corners = np.load(path_corners)
@@ -199,12 +232,18 @@ def main() -> int:
     lines = []
     taille_pixels = []
     alphas = []
+    print ('avant figure')
     plt.figure()
+    print("plt.figure")
     step = 2
     for i in range(0, corners.shape[0], step):
+        print("rentre dans boucle for")
         linei, popti = select_line(imgs[i, :, :], corners[i, :, :])
+        print("select line")
         lines.append(linei)
+        print ("lines.append")
         x_axis = (linei[:, 0] - linei[0, 0]) / (linei[-1, 0] - linei[0, 0])
+        print('x_axis')
         nb_pixels_ligne = len(linei[:, 3])
         current_taille_pixels = distance_2_arukos_width / nb_pixels_ligne
         taille_pixels.append(current_taille_pixels)
