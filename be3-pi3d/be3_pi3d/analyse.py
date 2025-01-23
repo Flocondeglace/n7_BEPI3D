@@ -232,18 +232,12 @@ def main() -> int:
     lines = []
     taille_pixels = []
     alphas = []
-    print ('avant figure')
     plt.figure()
-    print("plt.figure")
     step = 2
     for i in range(0, corners.shape[0], step):
-        print("rentre dans boucle for")
         linei, popti = select_line(imgs[i, :, :], corners[i, :, :])
-        print("select line")
         lines.append(linei)
-        print ("lines.append")
         x_axis = (linei[:, 0] - linei[0, 0]) / (linei[-1, 0] - linei[0, 0])
-        print('x_axis')
         nb_pixels_ligne = len(linei[:, 3])
         current_taille_pixels = distance_2_arukos_width / nb_pixels_ligne
         taille_pixels.append(current_taille_pixels)
