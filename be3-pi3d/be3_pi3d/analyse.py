@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import scipy
 import rawpy
 import exifread
+import scipy.interpolate
 
 
 def func(x, a, b, c):
@@ -216,11 +217,11 @@ def main() -> int:
     # Trouver les lignes de l'image à analyser
     lines = []
     taille_pixels = []
-    alphas = []
+    distances_cam = []
     plt.figure()
-    step = 4
     # pour le diapo
     used_i = [0, 5, 9, imgs.shape[0] - 1]
+    # step = 4
     # used_i = range(0, corners.shape[0], step)
 
     for i in used_i:
@@ -235,13 +236,7 @@ def main() -> int:
         current_taille_pixels = distance_2_arukos_width / nb_pixels_ligne
         taille_pixels.append(current_taille_pixels)
         distance_cami = current_taille_pixels * distance_first_cam / taille_pixels[0]
-        alphas.append(
-            (2 / np.sqrt((x_axis * current_taille_pixels) ** 2 + 2**2)) ** 4
-            # compute_cos_4_alphas(
-            #    np.sqrt((x_axis * current_taille_pixels) ** 2 + distance_cami**2), 2
-            # )
-        )
-
+        distances_cam.append(distance_cami)
         print(f"distance : {distance_cami} cm")
         plt.plot(x_axis, linei[:, 3])
         plt.text(
@@ -251,51 +246,111 @@ def main() -> int:
             fontsize=10,
             color="black",
         )
-    plt.legend([str(i + 1) for i in used_i])
+    plt.legend(
+        [(str(round(distances_cam[i], 1)) + " cm") for i in range(len(distances_cam))]
+    )
     plt.ylabel("L")
     plt.xlabel("distance (cm)")
     plt.title("Visualisation de la luminance d'un même point à différentes distances")
     plt.show()
 
-    # experience alpha
+    # Plot interpolation
     # plt.figure()
-    # for i in range(3):  # len(alphas)):
-    #     plt.plot(alphas[i] / max(alphas[i]))
-    # plt.legend([str(i) for i in range(0, 3)])
+    # for i in range(len(lines)):
+    #     x_axis = (
+    #         (lines[i][:, 0] - lines[i][0, 0])
+    #         / (lines[i][-1, 0] - lines[i][0, 0])
+    #         * distance_2_arukos_width
+    #     )
+    #     plt.subplot(len(lines) // 2, 3, i + 1)
+    #     plt.plot(x_axis, lines[i][:, 2])
+    #     plt.plot(x_axis, lines[i][:, 3])
+    #     plt.ylabel("L")
+    #     plt.xlabel("distance (cm)")
+    #     plt.title(str(used_i[i] + 1))
+    # plt.tight_layout()
     # plt.show()
 
-    # Plot interpolation
-    plt.figure()
-    for i in range(len(lines)):
-        x_axis = (
-            (lines[i][:, 0] - lines[i][0, 0])
-            / (lines[i][-1, 0] - lines[i][0, 0])
-            * distance_2_arukos_width
-        )
-        plt.subplot(len(lines) // 2, 3, i + 1)
-        plt.plot(x_axis, lines[i][:, 2])
-        plt.plot(x_axis, lines[i][:, 3])
-        plt.ylabel("L")
-        plt.xlabel("distance (cm)")
-        plt.title(str(used_i[i] + 1))
-    plt.tight_layout()
-    plt.show()
-
-    analyse_cos_alpha(lines)
-    plt.figure()
-    plt.plot(lines[0][:, 3])
-    plt.plot(
-        lines[-1][:, 3] * (np.cos(lines[-1][:, 0] * taille_pixels[-1])) ** 4 + 2000
-    )
-    plt.legend(["normal", "inventer"])
-    plt.show()
-
+    analyse_cos_alpha(lines, distance_2_arukos_width)
     return 0
 
 
-def analyse_cos_alpha(lines):
-    L1 = lines[0]
-    L2 = lines[-1]
+def func_cos(x, alpha, beta):
+    return x * (np.cos(alpha)) ** 4 * beta
+
+
+def analyse_cos_alpha(lines, distance_2_arukos_width, x0=15):
+    """
+    lines :
+    - valeurs x de l'image,
+    - valeurs y
+    - luminance en ce point
+    - approx luminance
+    """
+    Lref = lines[2]
+    L2 = lines[1]
+
+    x_axis_ref = (
+        (Lref[:, 0] - Lref[0, 0]) / (Lref[-1, 0] - Lref[0, 0]) * distance_2_arukos_width
+    )
+    x_axis_2 = (L2[:, 0] - L2[0, 0]) / (L2[-1, 0] - L2[0, 0]) * distance_2_arukos_width
+
+    # x_common = np.linspace(x_axis_ref[0], x_axis_ref[-1], 100)
+
+    # # Interpolation des deux courbes
+    # interp_yref = scipy.interpolate.interp1d(
+    #     x_axis_ref, Lref[:, 3], kind="cubic", fill_value="extrapolate"
+    # )
+    # interp_y2 = scipy.interpolate.interp1d(
+    #     x_axis_2, L2[:, 3], kind="cubic", fill_value="extrapolate"
+    # )
+
+    # # Échantillonnage des valeurs interpolées sur l'échelle commune
+    # yref_common = interp_yref(x_common)
+    # y2_common = interp_y2(x_common)
+
+    # # Trouver alpha
+    # popt, pcov = scipy.optimize.curve_fit(func_cos, yref_common, y2_common)
+    # y = func_cos(x_axis_ref, *popt)
+    for i in range(100):
+        x0 = x0 + 0.1
+
+        Lalpha = Lref[:, 3] * ((np.cos((x_axis_ref[0] - x0) * 1000)) ** 4)
+        if Lalpha[0] > 2500:
+            # Affichage
+
+            plt.figure()
+            plt.plot(x_axis_ref, Lref[:, 3])
+            # plt.plot(x_common, yref_common)
+            plt.text(
+                x_axis_ref[-1],
+                Lref[-1, 3],
+                "Lref",
+                fontsize=10,
+                color="black",
+            )
+            plt.plot(x_axis_2, L2[:, 3])
+            plt.text(
+                x_axis_2[-1],
+                L2[-1, 3],
+                "L2",
+                fontsize=10,
+                color="black",
+            )
+            plt.plot(x_axis_ref, Lalpha)
+            plt.text(
+                x_axis_ref[-1],
+                Lalpha[-1],
+                "L21cos4alpha",
+                fontsize=10,
+                color="black",
+            )
+
+            plt.axvline(x0, color="red", linestyle=(0, (5, 5)))
+            plt.title(str(x0))
+            plt.show()
+
+            print(Lref)
 
 
 if __name__ == "__main__":
