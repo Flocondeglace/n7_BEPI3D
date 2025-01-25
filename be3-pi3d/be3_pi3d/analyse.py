@@ -27,7 +27,7 @@ def select_line(img, corners):
         corners (list): liste des coordonnées des QRCode
 
     Return:
-        line (np.ndarray): 
+        line (np.ndarray):
         popt (array): tableau de valeurs pour ajuster la fonction func à des données
     """
     y_left = (corners[0, 1] + corners[3, 1]) // 2
@@ -39,7 +39,9 @@ def select_line(img, corners):
     for i in range(line.shape[0]):
         x = x_min + i
         line[i, :] = [x, y[i], img[int(y[i]), x], 0]
-    popt, pcov = scipy.optimize.curve_fit(func, line[:, 0], line[:, 2]) # Utiliser les moindres carrés non linéaires pour ajuster une fonction, f, à des données
+    popt, pcov = scipy.optimize.curve_fit(
+        func, line[:, 0], line[:, 2]
+    )  # Utiliser les moindres carrés non linéaires pour ajuster une fonction, f, à des données
     line[:, 3] = func(line[:, 0], *popt)
     return line, popt
 
@@ -47,7 +49,7 @@ def select_line(img, corners):
 def load_image(path_image, kernel_size: int = 20, plot=False):
     """
     Cette fonction retourne le canal vert de l'image lissée.
-    
+
     Arguments:
         path_image (str): chemin de l'image .raw à charger
         kernel_size (int): taille du noyau pour le lissage de l'image (enlever les granules sur le fond vert)
@@ -118,22 +120,6 @@ def plot_extracted_line(img, line):
     plt.show()
 
 
-# utile ????
-def compute_cos_4_alphas(distances_axe_opt, focale):
-    """Calcule alpha pour chaque distances à l'axe optique, à l'aide de p' = f'"""
-    # CAHSOHTOA -> cos alpha = adj/hyp = f'/ Cp
-    #           -> tan alpha = opp/adj = distances_axe_opt / f'
-    # Or cos^2 = 1/(tan^2 +1)
-    tan_alphas = distances_axe_opt / focale
-    cos_4_alphas = 1 / (tan_alphas**2 + 1)
-    return cos_4_alphas
-
-
-def compute_nearly_E(cos_4_alphas, focale, lum):
-    nearly_E = cos_4_alphas * lum / (focale**2)
-    return nearly_E
-
-
 def get_corners(imgs, filename):
     corners = np.zeros((imgs.shape[0], 4, 2), dtype=np.int64)
     print(corners.shape)
@@ -186,15 +172,14 @@ def main() -> int:
 
     corners = np.array(corners, dtype=np.int64)
 
-    # path_images_folder = (
-    #     "/home/flocondeglace/Documents/Ecole/PI3D/n7_BEPI3D/be3-pi3d/images/"
-    # )
     path_images_folder = (
-        "/home/jureme/PI3D/n7_BEPI3D/be3-pi3d/images/"
+        "/home/flocondeglace/Documents/Ecole/PI3D/n7_BEPI3D/be3-pi3d/images/"
     )
-    
+    # path_images_folder = (
+    #     "/home/jureme/PI3D/n7_BEPI3D/be3-pi3d/images/"
+    # )
 
-    num_images = np.array([55] + list(np.arange(42, 55)))
+    # num_images = np.array([55] + list(np.arange(42, 55)))
 
     # Charger les images
     # imgs = []
@@ -203,8 +188,8 @@ def main() -> int:
     #     imgs.append(load_image(path_image))
     # imgs = np.array(imgs)
     imgs = []
-    for path_image in os.listdir(path_images_folder):      
-        imgs.append(load_image( path_images_folder + path_image))
+    for path_image in os.listdir(path_images_folder):
+        imgs.append(load_image(path_images_folder + path_image))
     imgs = np.array(imgs)
 
     # path_corners = (
@@ -233,11 +218,19 @@ def main() -> int:
     taille_pixels = []
     alphas = []
     plt.figure()
-    step = 2
-    for i in range(0, corners.shape[0], step):
+    step = 4
+    # pour le diapo
+    used_i = [0, 5, 9, imgs.shape[0] - 1]
+    # used_i = range(0, corners.shape[0], step)
+
+    for i in used_i:
         linei, popti = select_line(imgs[i, :, :], corners[i, :, :])
         lines.append(linei)
-        x_axis = (linei[:, 0] - linei[0, 0]) / (linei[-1, 0] - linei[0, 0])
+        x_axis = (
+            (linei[:, 0] - linei[0, 0])
+            / (linei[-1, 0] - linei[0, 0])
+            * distance_2_arukos_width
+        )
         nb_pixels_ligne = len(linei[:, 3])
         current_taille_pixels = distance_2_arukos_width / nb_pixels_ligne
         taille_pixels.append(current_taille_pixels)
@@ -252,12 +245,16 @@ def main() -> int:
         print(f"distance : {distance_cami} cm")
         plt.plot(x_axis, linei[:, 3])
         plt.text(
-            x_axis[-1], linei[-1, 3], str(num_images[i]), fontsize=10, color="black"
+            x_axis[-1],
+            linei[-1, 3],
+            str(i + 1),
+            fontsize=10,
+            color="black",
         )
-        # print(f"paramètre de la droite de l'image {num_images[i]} : {popti}")
-    plt.legend([str(num_images[i]) for i in range(0, corners.shape[0], step)])
-    plt.ylabel("I")
-    plt.xlabel("pixels")
+    plt.legend([str(i + 1) for i in used_i])
+    plt.ylabel("L")
+    plt.xlabel("distance (cm)")
+    plt.title("Visualisation de la luminance d'un même point à différentes distances")
     plt.show()
 
     # experience alpha
@@ -270,14 +267,21 @@ def main() -> int:
     # Plot interpolation
     plt.figure()
     for i in range(len(lines)):
-        plt.subplot(4, 4, i + 1)
-        plt.plot(lines[i][:, 0], lines[i][:, 2])
-        plt.plot(lines[i][:, 0], lines[i][:, 3])
-        plt.ylabel("I")
+        x_axis = (
+            (lines[i][:, 0] - lines[i][0, 0])
+            / (lines[i][-1, 0] - lines[i][0, 0])
+            * distance_2_arukos_width
+        )
+        plt.subplot(len(lines) // 2, 3, i + 1)
+        plt.plot(x_axis, lines[i][:, 2])
+        plt.plot(x_axis, lines[i][:, 3])
+        plt.ylabel("L")
         plt.xlabel("distance (cm)")
-        plt.title(str(num_images[i * step]))
+        plt.title(str(used_i[i] + 1))
     plt.tight_layout()
     plt.show()
+
+    analyse_cos_alpha(lines)
     plt.figure()
     plt.plot(lines[0][:, 3])
     plt.plot(
@@ -287,6 +291,11 @@ def main() -> int:
     plt.show()
 
     return 0
+
+
+def analyse_cos_alpha(lines):
+    L1 = lines[0]
+    L2 = lines[-1]
 
 
 if __name__ == "__main__":
