@@ -60,7 +60,7 @@ def select_line(img, corners, distance):
 
     # x_0 = img.shape[1] // 2 - x_min
     # line[0, 4] = x_0
-
+    print("taille pixel : ", x_max - x_min)
     return line, popt
 
 
@@ -216,7 +216,7 @@ def load_images(path_folder):
 
 
 def extract_lines(
-    imgs, corners, distance_real, distance_first_cam, nb_point=200, plot=True
+    imgs, corners, distance_real, distance_first_cam, nb_point=200, plot=False
 ):
     x_common = np.linspace(0, distance_real, nb_point)
     nb_images = imgs.shape[0]
@@ -260,7 +260,7 @@ def extract_lines(
         x0.append(x_common[np.argmin(diff)])
     print(x0)
     print("offsets : ", offsets)
-    return x_common, greens, distances_cam, offsets, lines, np.mean(x0)
+    return x_common, greens, distances_cam, offsets, lines, np.mean(x0[1:])
 
 
 def main() -> int:
@@ -292,9 +292,10 @@ def main() -> int:
         imgs, corners, distance_2_arukos_width, distance_first_cam
     )
 
+    # Affichage niveaux de vert SANS correction offsets
     plt.figure()
     for i in range(nb_images):
-        plt.plot(x_common, greens[i] - offsets[i])
+        plt.plot(x_common, greens[i])
 
     plt.legend(
         [(str(round(distances_cam[i], 1)) + " cm") for i in range(len(distances_cam))]
@@ -304,11 +305,26 @@ def main() -> int:
     plt.title("Visualisation du niveau de vert d'un même point à différentes distances")
     plt.show()
 
-    analyse_cos_alpha(lines, distance_2_arukos_width, x0)
+    # Affichage niveaux de vert avec correction offsets
+    plt.figure()
+    for i in range(nb_images):
+        plt.plot(x_common, greens[i] - offsets[i])
+
+    plt.legend(
+        [(str(round(distances_cam[i], 1)) + " cm") for i in range(len(distances_cam))]
+    )
+    plt.ylabel("Niveau de vert")
+    plt.xlabel("distance (cm)")
+    plt.title(
+        "Visualisation du niveau de vert (réajusté) d'un même point à différentes distances"
+    )
+    plt.show()
+
+    analyse_cos_alpha(x_common, greens, offsets, distance_2_arukos_width, x0)
     return 0
 
 
-def analyse_cos_alpha(lines, distance_2_arukos_width, x_0):
+def analyse_cos_alpha(x_common, greens, offsets, distance_2_arukos_width, x_0):
     """
     lines :
     - valeurs x de l'image,
@@ -316,108 +332,75 @@ def analyse_cos_alpha(lines, distance_2_arukos_width, x_0):
     - luminance en ce point
     - approx luminance
     """
-    Lref = lines[-1]
-    print(Lref[0, 4])
-    # x_0 = Lref[0, 4] / (Lref[-1, 0] - Lref[0, 0]) * distance_2_arukos_width
-    L2 = lines[0]
-    L3 = lines[1]
-    print(x_0)
-
-    x_axis_ref = (
-        (Lref[:, 0] - Lref[0, 0]) / (Lref[-1, 0] - Lref[0, 0]) * distance_2_arukos_width
-    )
-    x_axis_2 = (L2[:, 0] - L2[0, 0]) / (L2[-1, 0] - L2[0, 0]) * distance_2_arukos_width
-    x_axis_3 = (L3[:, 0] - L3[0, 0]) / (L3[-1, 0] - L3[0, 0]) * distance_2_arukos_width
-
-    x_common = np.linspace(x_axis_ref[0], x_axis_ref[-1], 100)
-
-    # Interpolation des deux courbes
-    interp_yref = scipy.interpolate.interp1d(
-        x_axis_ref, Lref[:, 3], kind="cubic", fill_value="extrapolate"
-    )
-    interp_y2 = scipy.interpolate.interp1d(
-        x_axis_2, L2[:, 3], kind="cubic", fill_value="extrapolate"
-    )
-
-    # Échantillonnage des valeurs interpolées sur l'échelle commune
-    yref_common = interp_yref(x_common)
-    y2_common = interp_y2(x_common)
-
-    # ref = np.asarray([x_common * 0, yref_common])
-    # ref = np.transpose(ref)
-    # pasref = np.asarray([x_common, y2_common])
-    # pasref = np.transpose(pasref)
-
-    # # Trouver alpha
-
-    # sol_Lalpha = []
-    # min_error = 1000000000000
-    # sol_x0 = 0
-    # x0s = np.linspace(x0_min, x0_max, 500)
-
-    # for x0 in x0s:
-    #     x0 = x0 + 0.5
-    #     Lalpha = yref_common * ((np.cos((x_common - x0) / 100)) ** 4)
-    #     error = np.sum(np.abs(Lalpha - y2_common))
-    #     if error < min_error:
-    #         sol_Lalpha = Lalpha
-    #         sol_x0 = x0
-    #         min_error = error
-    sol_x0 = x_0
+    Lref = greens[-1] - offsets[-1]
+    L2 = greens[0] - offsets[0]
+    L3 = greens[1] - offsets[1]
+    print("x0", x_0)
 
     # Affichage
     plt.figure()
     legends = []
-    plt.plot(Lref[:, 4], Lref[:, 3])
+    plt.plot(x_common, Lref)
     legends.append(r"$L_{ref}$")
     # plt.plot(x_common, yref_common)
     plt.text(
-        Lref[-1, 4],
-        Lref[-1, 3],
+        x_common[-1],
+        Lref[-1],
         "Lref",
         fontsize=10,
         color="black",
     )
-    plt.plot(L2[:, 4], L2[:, 3])
+    plt.plot(x_common, L2)
     legends.append(r"$L_{2}$")
     plt.text(
-        L2[-1, 4],
-        L2[-1, 3],
+        x_common[-1],
+        L2[-1],
         "L2",
         fontsize=10,
         color="black",
     )
-    plt.plot(L3[:, 4], L3[:, 3])
-    legends.append(r"$L_{3}$")
+    # plt.plot(x_common, L3)
+    # legends.append(r"$L_{3}$")
+    # plt.text(
+    #     x_common[-1],
+    #     L3[-1],
+    #     "L3",
+    #     fontsize=10,
+    #     color="black",
+    # )
+    p_primes = np.linspace(0.000001, 2, 100)
+    diff_min = 100000
+    sol_p_prime = -1
+    for p_prime in p_primes:
+        Lalpha = Lref * (np.cos((x_common - x_0) / (100 * p_prime)) ** 4)
+        diff = np.sum(np.abs(L2 - Lalpha))
+        if diff < diff_min:
+            sol_Lalpha = Lalpha
+            diff_min = diff
+            sol_p_prime = p_prime
+
+    plt.plot(x_common, sol_Lalpha, "-")
+    legends.append(
+        r"Lref*$cos^4 \frac{\alpha}{\lambda}$,  $\lambda$ = "
+        + str(round(sol_p_prime, 2))
+    )
     plt.text(
-        L3[-1, 4],
-        L3[-1, 3],
-        "L3",
+        x_common[-1],
+        sol_Lalpha[-1],
+        r"Lref*cos$\alpha$",
         fontsize=10,
         color="black",
     )
-    p_primes = [1.5]  # np.linspace(2, 4, 3)
-    for p_prime in p_primes:
-        sol_Lalpha = yref_common * (np.cos((x_common - x_0) / (100 * p_prime)) ** 4)
-        plt.plot(x_common, sol_Lalpha, "-")
-        legends.append(r"Lref*cos$\alpha$,  p' = " + str(round(p_prime, 2)))
-        plt.text(
-            x_common[-1],
-            sol_Lalpha[-1],
-            r"Lref*cos$\alpha$",
-            fontsize=10,
-            color="black",
-        )
-        # plt.plot(x_common, y)
-        # plt.text(
-        #     x_common[-1],
-        #     y[-1],
-        #     "L21cos4alpha",
-        #     fontsize=10,
-        #     color="black",
-        # )
-    plt.axvline(sol_x0, color="red", linestyle=(0, (5, 5)))
-    plt.title("x0 = " + str(round(sol_x0, 2)) + ", p' = " + str(round(p_prime, 2)))
+    # plt.plot(x_common, y)
+    # plt.text(
+    #     x_common[-1],
+    #     y[-1],
+    #     "L21cos4alpha",
+    #     fontsize=10,
+    #     color="black",
+    # )
+    plt.axvline(x_0, color="red", linestyle=(0, (5, 5)))
+    plt.title("x0 = " + str(round(x_0, 2)))  # + ", p' = " + str(round(sol_p_prime, 2)))
     plt.ylabel("Niveau de vert")
     plt.xlabel("distance (cm)")
     plt.legend(legends)
